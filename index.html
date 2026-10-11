@@ -257,6 +257,8 @@ function hit(o,d){sfx('hit');o.hp-=d;o.fl=.15}
 function dmgB(o,d){if(!o||o.k=='tower'||o.breach)return;if(o.wood){d*=1.6;if(Math.random()<.5)pfx(o.x,o.y,14,3,'#f08a24',{up:40,life:.6})}hit(o,d);if(o.hp<=0&&o.k=='wall'){o.breach=1;o.hp=0;o.oil=null;scorch(o.x,o.y,16);dirty=true;sfx('breach');S.stats.br++;shake(7);pfx(o.x,o.y,10,22,'#b8a888',{up:25,g:-15,grow:2.5,s:7,sp:60,life:1.6});pfx(o.x,o.y,30,14,'#7a7468',{up:90,sp:80,s:4,life:1.4});say('Breach in the wall!')}}
 function shoot(a,b,kind,on){if(kind=='stone'&&on){const f=on;on=()=>{f();scorch(b.x+(Math.random()-.5)*10,b.y+(Math.random()-.5)*10,7+Math.random()*5);pfx(b.x,b.y,4,8,'#a89878',{up:20,g:-10,grow:2,s:5,life:.9});shake(1.5)}}sfx(kind=='stone'?'cat':'arrow');S.shots.push({x:a.x,y:a.y,tx:b.x,ty:b.y,t:0,kind,on})}
 function fireOil(s){const o=s.oil;if(!o||o.ch<=0||o.cd>0)return false;o.ch--;o.cd=8;sfx('cat');S.fx.push({x:s.x,y:s.y,t:0});pfx(s.x,s.y,WH*VS,26,'#f2f2f0',{up:45,g:12,grow:3,s:6,sp:50,life:1.3});sfx('splash');for(const e of S.en)if(!e.lvl&&hyp(e.x-s.x,e.y-s.y)<75)hit(e,ET[e.t].siege?70:100);return true}
+const FO={wall:6,gate:9.5,draw:9.5,tower:16.5,post:7},faceOff=o=>o===S.keep?G/2:FO[o.k]??G/2,reach=t=>({ram:27,stower:16,cat:20}[t]??4.5),FPR=t=>({ram:9,stower:12,cat:10}[t]??3);
+function unclip(e){if(e.lvl||e.dock!=null||e.onWall>0)return;const i=ci(e.x,e.y);for(const n of[i,...nb4(i)]){const o=occ[n];if(!o||o.breach)continue;const[cx0,cy0]=cc(n),h=faceOff(o)+FPR(e.t),dx=e.x-cx0,dy=e.y-cy0;if(Math.abs(dx)<h&&Math.abs(dy)<h){if(Math.abs(dx)>Math.abs(dy))e.x=cx0+Math.sign(dx||1)*h;else e.y=cy0+Math.sign(dy||1)*h}}}
 function blockE(i){const o=occ[i];return o&&!o.breach?o:null}
 function canHit(e,o){if(o.k=='tower'||e.t=='stower'||e.t=='cat')return false;if(o.k=='draw')return e.t=='ram';return true}
 function update(dt){if(S.dead){S.dead.forEach(d=>d.tm+=dt);S.dead=S.dead.filter(d=>d.tm<1.6)}[S.keep,...S.builds,...S.units,...S.en].forEach(o=>o&&(o.fl=Math.max(0,o.fl-dt)));
@@ -277,10 +279,12 @@ function update(dt){if(S.dead){S.dead.forEach(d=>d.tm+=dt);S.dead=S.dead.filter(
   if(e.t=='stower'&&f===fS&&f[i]==0){const w=nb4(i).find(n=>{const o=occ[n];return o&&o.k=='wall'&&!o.breach});if(w!=null){e.dock=w;const[wx,wy]=cc(w);e.a=Math.atan2(wy-e.y,wx-e.x);
    for(let j=0;j<5;j++)S.en.push({t:j%2?'mace':'foot',x:wx+(Math.random()-.5)*12,y:wy+(Math.random()-.5)*12,hp:50,max:50,cd:.5,fl:0,a:0,lvl:1,onWall:2.5});say('Siege tower docked!');continue}}
   let best=i,bv=f[i];for(const n of nb4(i))if(f[n]<bv){bv=f[n];best=n}
-  const[tx,ty]=cc(best),o=blockE(best),close=hyp(tx-e.x,ty-e.y)<G*.95;
+  let[tx,ty]=cc(best);const o=blockE(best);let close=hyp(tx-e.x,ty-e.y)<G*.95;
+  if(o&&S.moat[best]!=1){const[cx0,cy0]=cc(best),[ix,iy]=cc(i),dx=Math.sign(ix-cx0),dy=Math.sign(iy-cy0),sd=faceOff(o)+reach(e.t);const ax=dx&&dy?(Math.abs(e.x-cx0)>Math.abs(e.y-cy0)?dx:0):dx,ay=dx&&dy?(ax?0:dy):dy;
+   const px=cx0+ax*sd+(ax?0:Math.max(-8,Math.min(8,e.x-cx0))),py=cy0+ay*sd+(ay?0:Math.max(-8,Math.min(8,e.y-cy0)));close=hyp(px-e.x,py-e.y)<3;if(close){e.x=px;e.y=py;e.a=Math.atan2(cy0-py,cx0-px)}else{tx=px;ty=py}}
   if(S.moat[best]==1){if(!close)move(e,tx,ty,b.spd,dt);else if(b.dig){S.dig[best]=(S.dig[best]||0)+dt;if(Math.random()<dt*3){const[wx,wy]=cc(best);pfx(wx,wy,1,3,'#d8ecf4',{up:40,sp:30,s:2.5,life:.6})}e.cd=Math.min(e.cd,.5);if(S.dig[best]>=5){const[wx,wy]=cc(best);pfx(wx,wy,1,14,'#d8ecf4',{up:60,sp:50,s:3,life:.8});sfx('splash');S.moat[best]=2;S.moatV++;dirty=true}}}
   else if(o){if(!close)move(e,tx,ty,b.spd,dt);else if(e.cd<=0&&canHit(e,o)){e.cd=1.2;const dm=b.dmg*(e.t=='ram'&&o.k!='wall'&&o!==S.keep?1.6:1)*(e.t=='mace'&&o.k=='gate'?1.5:1);if(o.oil&&e.t!='ram'){o.oil.hp-=dm;o.oil.fl=.15;if(o.oil.hp<=0){o.oil=null;say('A cauldron was smashed')}}else if(o===S.keep)hit(o,dm);else dmgB(o,dm)}}
-  else move(e,tx,ty,b.spd,dt)}
+  else move(e,tx,ty,b.spd,dt);unclip(e)}
  if(S.bsite&&!S.bsite.done){const n=S.en.filter(e=>e.eng&&e.bld&&e.hp>0).length;if(n){S.bsite.p=Math.min(1,S.bsite.p+dt*n/60);if(Math.random()<dt*2)sfx('build')}if(S.bsite.p>=1){S.bsite.done=1;for(const i of S.bsite.cells)RIV[i]=3;dirty=true;S.en.forEach(e=>{e.eng=0;e.bld=0});flash('The enemy has bridged the river!');sfx('horn')}}
  for(const u of S.units){const b=UT[u.t];u.cd-=dt;u.rp-=dt;u.px=u.x;u.py=u.y;
   if(u.path&&u.path.length){const[tx,ty]=cc(u.path[0]);if(hyp(tx-u.x,ty-u.y)<3)u.path.shift();else move(u,tx,ty,b.spd,dt)}
